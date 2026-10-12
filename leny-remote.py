@@ -15,8 +15,8 @@ except ImportError:
     HAS_GUI = False
 
 # --- ÖZEL YAPILANDIRMA ---
-TOKEN = "8933706623:AAF-UGKiWryqr4RNXhlY-2s6mpNtvI5W2qU"
-AUTHORIZED_USER_ID = 8201682688  # Kendi Telegram User ID'ni buraya yaz
+TOKEN = "TOKEN"
+AUTHORIZED_USER_ID = 1234567890  # Kendi Telegram User ID'ni buraya yaz
 
 def send_message(chat_id, text):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
